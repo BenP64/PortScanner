@@ -13,14 +13,14 @@ When given a target IP address and a port range, it attempts to connect to each 
 
 ## Installation
 ```bash
-git clone ...
-cd ...
+git clone https://github.com/BenP64/PortScanner
+cd PortScanner
 ```
 
 ## Usage
 Run the script directly:
 ```bash
-python scanner.py
+python3 scanner.py
 ```
 You'll be prompted for two inputs:
 ```

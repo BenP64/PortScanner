@@ -1,6 +1,15 @@
-import socket, ipaddress, time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import timedelta
+try:
+    import socket, ipaddress, time
+    import sys
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from datetime import timedelta
+    from modules.settings import retrieve_setting
+except KeyboardInterrupt:
+    print("Exiting...")
+    sys.exit(0)
+except Exception:
+    print("Error importing, Please ensure dependencies are installed.")
+    sys.exit(1)
 
 def validate_ip(target_ip):
     """ Validates the IP and returns it as a string """
@@ -9,8 +18,7 @@ def validate_ip(target_ip):
         validated_ip = ipaddress.ip_address(stripped_ip)
         return str(validated_ip) # Returns the validated IP as a string
     except ValueError:
-        print(f'"{target_ip}" is not a valid IP address')
-        return None
+        raise ValueError(f'\n"{target_ip}" is not a valid IP address')
 
 
 def parse_port_range(input_range):
@@ -19,12 +27,12 @@ def parse_port_range(input_range):
         start_str, end_str = input_range.split("-")
         start, end = int(start_str.strip()), int(end_str.strip())
     except ValueError:
-        raise ValueError("Port range must be integers and include a hyphen '-', (e.g. 20-100)")
+        return print("\nPort range must be valid integers and include a hyphen '-', (e.g. 20-100)")
 
     if not (0 <= start <= 65535 and 0 <= end <= 65535):
-        print("Ports must be between 0 and 65535")
+        return print("\nPorts must be between 0 and 65535")
     if start > end:
-        print("Start port cannot be larger than end port")
+        return print("\nStart port cannot be larger than end port")
 
     return start, end # returns start and end port as validated integers.
 
@@ -33,7 +41,7 @@ def scan_port(ip, port):
     """ Returns (port, open status, banner) for every port scanned. """
     try:
         with socket.socket() as s:
-            s.settimeout(1)
+            s.settimeout(retrieve_setting("port_timeout"))
             s.connect((ip, port)) # Port is open when .connect() succeeds
             banner = ""
             try:
@@ -49,35 +57,33 @@ def scan_port(ip, port):
         return port, False, f"Error: {e}"
 
 
-def scan(target_ip, start_port, end_port, max_workers=2000):
-    """ Scan a range of ports and print the open ones """
+def scan(target_ip, start_port, end_port):
+    """ Scans a range of ports and prints the open ports and their banner, if one was available. """
     ip = validate_ip(target_ip)
-    if isinstance(ip, str):
-        print(f"Starting scan on {ip} from port {start_port} to port {end_port}...")
-        start_time = time.time()
+    max_workers = retrieve_setting("max_workers")
+    print(f"Starting scan on {ip} from port {start_port} to port {end_port}...")
+    start_time = time.time()
+    open_ports = []
 
-        open_ports = []
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [
-                executor.submit(scan_port, ip, port)
-                for port in range(start_port, end_port + 1)
-            ]
-            for future in as_completed(futures):
-                port, open_status, banner = future.result()
-                if open_status:
-                    if banner:
-                        print(f"Port {port} is Open: {banner}")
-                    else:
-                        print(f"Port {port} is open.")
-                    open_ports.append(port)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(scan_port, ip, port)
+            for port in range(start_port, end_port + 1)
+        ]
+
+        for future in as_completed(futures):
+            port, open_status, banner = future.result()
+            if open_status:
+                if banner:
+                    print(f"Port {port} is Open: {banner}")
+                else:
+                    print(f"Port {port} is open.")
+                open_ports.append(port)
 
         end_time = time.time()
         elapsed = end_time - start_time
         print(f"\nScan complete! {len(open_ports)} open port(s) found in: {str(timedelta(seconds=elapsed))[:-3]}")
         return True
-    else:
-        print(f"Error. {target_ip} is not a valid IP address")
-        return False
 
 
 def port_scanner():
@@ -89,5 +95,7 @@ def port_scanner():
         scan(input_ip, start, end)
     except ValueError as e:
         print(f"{e}")
+    except TypeError as e:
+        print(f"{e}")
     except KeyboardInterrupt:
-        print("Scan cancelled.")
+        print("\nScan manually cancelled")

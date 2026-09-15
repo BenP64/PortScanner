@@ -23,3 +23,6 @@ dist/
 # OS-specific junk
 .DS_Store
 Thumbs.db
+
+# Settings.ini
+settings.ini
